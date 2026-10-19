@@ -2958,9 +2958,18 @@ static const struct clk_ops hdptx_phy_clk_ops = {
 	.set_rate = rk_hdptx_phy_clk_set_rate,
 };
 
+static void rk_hdptx_phy_clk_port_del(void *data)
+{
+	struct device_node *np = data;
+
+	of_clk_del_provider(np);
+	of_node_put(np);
+}
+
 static int rk_hdptx_phy_clk_register(struct rk_hdptx_phy *hdptx)
 {
 	struct device *dev = hdptx->dev;
+	struct device_node *np;
 	const char *name, *pname;
 	struct clk *refclk;
 	int ret;
@@ -2984,7 +2993,20 @@ static int rk_hdptx_phy_clk_register(struct rk_hdptx_phy *hdptx)
 	if (ret)
 		return dev_err_probe(dev, ret,
 				     "Failed to register clk provider\n");
-	return 0;
+
+	/* Old Rockchip U-Boot binds the PHY clock to a "clk-port" child only. */
+	np = of_get_child_by_name(dev->of_node, "clk-port");
+	if (!np)
+		return 0;
+
+	ret = of_clk_add_hw_provider(np, of_clk_hw_simple_get, &hdptx->hw);
+	if (ret) {
+		of_node_put(np);
+		return dev_err_probe(dev, ret,
+				     "Failed to register clk-port provider\n");
+	}
+
+	return devm_add_action_or_reset(dev, rk_hdptx_phy_clk_port_del, np);
 }
 
 static int rk_hdptx_phy_runtime_suspend(struct device *dev)

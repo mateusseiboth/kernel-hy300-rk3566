@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2026 The LineageOS Project
+ *
+ * HDMI0 PHY as pre-rkr5 Rockchip U-Boot (2017.09, 2023-2024 vendor builds)
+ * expects it: it binds only the -hdptx-phy-hdmi compatible, needs the ropll
+ * reset, and takes link_clk from a clk-port child.
+ */
+
+&hdmi0 {
+	clocks = <&cru PCLK_HDMITX0>,
+		 <&cru CLK_HDMIHDP0>,
+		 <&cru CLK_HDMITX0_EARC>,
+		 <&cru CLK_HDMITX0_REF>,
+		 <&cru MCLK_I2S5_8CH_TX>,
+		 <&cru DCLK_VOP0>,
+		 <&cru DCLK_VOP1>,
+		 <&cru DCLK_VOP2>,
+		 <&cru DCLK_VOP3>,
+		 <&hclk_vo1>,
+		 <&hdptxphy0_clk>;
+};
+
+&hdptxphy0 {
+	compatible = "rockchip,rk3588-hdptx-phy-hdmi", "rockchip,rk3588-hdptx-phy";
+	resets = <&cru SRST_P_HDPTX0>, <&cru SRST_HDPTX0_INIT>,
+		 <&cru SRST_HDPTX0_CMN>, <&cru SRST_HDPTX0_LANE>,
+		 <&cru SRST_HDPTX0>, <&cru SRST_HDPTX0_ROPLL>,
+		 <&cru SRST_HDPTX0_LCPLL>;
+	reset-names = "apb", "init", "cmn", "lane", "phy", "ropll", "lcpll";
+
+	hdptxphy0_clk: clk-port {
+		#clock-cells = <0>;
+	};
+};

@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2026 The LineageOS Project
+ *
+ * rk3588s-legacy-uboot-hdmi.dtsi plus the same for HDMI1.
+ */
+
+#include "rk3588s-legacy-uboot-hdmi.dtsi"
+
+&hdmi1 {
+	clocks = <&cru PCLK_HDMITX1>,
+		 <&cru CLK_HDMIHDP1>,
+		 <&cru CLK_HDMITX1_EARC>,
+		 <&cru CLK_HDMITX1_REF>,
+		 <&cru MCLK_I2S6_8CH_TX>,
+		 <&cru DCLK_VOP0>,
+		 <&cru DCLK_VOP1>,
+		 <&cru DCLK_VOP2>,
+		 <&cru DCLK_VOP3>,
+		 <&hclk_vo1>,
+		 <&hdptxphy1_clk>;
+};
+
+&hdptxphy1 {
+	compatible = "rockchip,rk3588-hdptx-phy-hdmi", "rockchip,rk3588-hdptx-phy";
+	resets = <&cru SRST_P_HDPTX1>, <&cru SRST_HDPTX1_INIT>,
+		 <&cru SRST_HDPTX1_CMN>, <&cru SRST_HDPTX1_LANE>,
+		 <&cru SRST_HDPTX1>, <&cru SRST_HDPTX1_ROPLL>,
+		 <&cru SRST_HDPTX1_LCPLL>;
+	reset-names = "apb", "init", "cmn", "lane", "phy", "ropll", "lcpll";
+
+	hdptxphy1_clk: clk-port {
+		#clock-cells = <0>;
+	};
+};

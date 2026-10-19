@@ -11,6 +11,7 @@
 
 #include "rk3588-nvr-demo.dtsi"
 #include "rk3588-android.dtsi"
+#include "rk3588s-legacy-uboot-hdmi.dtsi"
 
 / {
 	model = "Rockchip RK3588 NVR DEMO LP4 V10 Android Board";
@@ -92,21 +93,6 @@
 	snps,reset-gpio = <&gpio3 RK_PB7 GPIO_ACTIVE_LOW>;
 };
 
-/* The stock U-Boot takes link_clk only from a clk-port child of the PHY. */
-&hdmi0 {
-	clocks = <&cru PCLK_HDMITX0>,
-		 <&cru CLK_HDMIHDP0>,
-		 <&cru CLK_HDMITX0_EARC>,
-		 <&cru CLK_HDMITX0_REF>,
-		 <&cru MCLK_I2S5_8CH_TX>,
-		 <&cru DCLK_VOP0>,
-		 <&cru DCLK_VOP1>,
-		 <&cru DCLK_VOP2>,
-		 <&cru DCLK_VOP3>,
-		 <&hclk_vo1>,
-		 <&hdptxphy0_clk>;
-};
-
 &hdmi0_in_vp1 {
 	status = "disabled";
 };
@@ -129,20 +115,6 @@
 
 &hdmi1_sound {
 	status = "disabled";
-};
-
-/* The stock U-Boot (Jul 2023) binds only the -hdmi compatible and needs the ropll reset. */
-&hdptxphy0 {
-	compatible = "rockchip,rk3588-hdptx-phy-hdmi", "rockchip,rk3588-hdptx-phy";
-	resets = <&cru SRST_P_HDPTX0>, <&cru SRST_HDPTX0_INIT>,
-		 <&cru SRST_HDPTX0_CMN>, <&cru SRST_HDPTX0_LANE>,
-		 <&cru SRST_HDPTX0>, <&cru SRST_HDPTX0_ROPLL>,
-		 <&cru SRST_HDPTX0_LCPLL>;
-	reset-names = "apb", "init", "cmn", "lane", "phy", "ropll", "lcpll";
-
-	hdptxphy0_clk: clk-port {
-		#clock-cells = <0>;
-	};
 };
 
 &hdptxphy1 {

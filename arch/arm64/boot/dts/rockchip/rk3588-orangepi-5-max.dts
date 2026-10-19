@@ -18,6 +18,7 @@
 #include "rk3588.dtsi"
 #include "rk3588-rk806-single.dtsi"
 #include "rk3588-android.dtsi"
+#include "rk3588-legacy-uboot-hdmi.dtsi"
 
 / {
 	model = "RK3588 OPi 5 Max";
@@ -937,14 +938,11 @@
 	status = "okay";
 };
 
-/* The stock U-Boot only binds the HDMI half of the merged PHY by this. */
 &hdptxphy0 {
-	compatible = "rockchip,rk3588-hdptx-phy-hdmi", "rockchip,rk3588-hdptx-phy";
 	status = "okay";
 };
 
 &hdptxphy1 {
-	compatible = "rockchip,rk3588-hdptx-phy-hdmi", "rockchip,rk3588-hdptx-phy";
 	status = "okay";
 };
 

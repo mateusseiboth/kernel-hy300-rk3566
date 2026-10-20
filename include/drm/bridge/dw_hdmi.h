@@ -388,6 +388,7 @@ void dw_hdmi_phy_init(struct dw_hdmi *hdmi);
 void dw_hdmi_qp_set_allm_enable(struct dw_hdmi_qp *hdmi_qp, struct drm_connector *conn,
 				bool enable);
 void dw_hdmi_qp_handle_hpd(struct dw_hdmi_qp *hdmi, bool enable);
+void dw_hdmi_qp_loader_protect(struct dw_hdmi_qp *hdmi, bool on);
 void dw_hdmi_qp_set_gaming_vrr_enable(struct dw_hdmi_qp *hdmi_qp, bool enable);
 void dw_hdmi_qp_set_qms(struct dw_hdmi_qp *hdmi, u8 next_tfr, u8 m_const);
 u8 dw_hdmi_qp_get_next_tfr(struct dw_hdmi_qp *hdmi);

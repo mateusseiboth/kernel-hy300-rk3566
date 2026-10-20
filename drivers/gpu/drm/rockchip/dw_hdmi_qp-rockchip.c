@@ -1791,6 +1791,7 @@ static int _dw_hdmi_rockchip_encoder_loader_protect(struct rockchip_dw_hdmi_qp *
 			DRM_DEV_ERROR(hdmi->dev, "failed to enable link_clk %d\n", ret);
 			return ret;
 		}
+		dw_hdmi_qp_loader_protect(hdmi->hdmi_qp, true);
 	} else {
 		clk_disable_unprepare(hdmi->link_clk);
 	}

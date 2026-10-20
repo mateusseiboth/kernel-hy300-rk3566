@@ -3271,6 +3271,19 @@ out:
 }
 EXPORT_SYMBOL_GPL(dw_hdmi_qp_handle_hpd);
 
+void dw_hdmi_qp_loader_protect(struct dw_hdmi_qp *hdmi, bool on)
+{
+	if (!hdmi || !on || hdmi->initialized)
+		return;
+
+	mutex_lock(&hdmi->mutex);
+	hdmi->initialized = true;
+	hdmi->disabled = false;
+	hdmi->logo_plug_out = true;
+	mutex_unlock(&hdmi->mutex);
+}
+EXPORT_SYMBOL_GPL(dw_hdmi_qp_loader_protect);
+
 void dw_hdmi_qp_set_gaming_vrr_enable(struct dw_hdmi_qp *hdmi, bool enable)
 {
 	if (!hdmi)

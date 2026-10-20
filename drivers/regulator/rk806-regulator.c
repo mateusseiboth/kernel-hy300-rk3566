@@ -1251,7 +1251,7 @@ static bool rk806_virtual_poweroff(void)
 	struct device_node *np;
 	u32 enable = 0;
 
-	np = of_find_compatible_node(NULL, NULL, "rockchip,pm-config");
+	np = of_find_node_with_property(NULL, "rockchip,virtual-poweroff");
 	if (np && of_device_is_available(np))
 		of_property_read_u32(np, "rockchip,virtual-poweroff", &enable);
 	of_node_put(np);

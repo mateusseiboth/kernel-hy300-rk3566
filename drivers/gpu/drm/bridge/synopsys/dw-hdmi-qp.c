@@ -4253,8 +4253,9 @@ static irqreturn_t dw_hdmi_qp_main_hardirq(int irq, void *dev_id)
 
 	stat = hdmi_readl(hdmi, MAINUNIT_1_INT_STATUS);
 
-	i2c->stat = stat & (I2CM_OP_DONE_IRQ | I2CM_READ_REQUEST_IRQ |
-			    I2CM_NACK_RCVD_IRQ);
+	if (i2c)
+		i2c->stat = stat & (I2CM_OP_DONE_IRQ | I2CM_READ_REQUEST_IRQ |
+				    I2CM_NACK_RCVD_IRQ);
 	hdmi->scdc_intr = stat & (SCDC_UPD_FLAGS_RD_IRQ |
 				  SCDC_UPD_FLAGS_CHG_IRQ |
 				  SCDC_UPD_FLAGS_CLR_IRQ |
@@ -4265,7 +4266,7 @@ static irqreturn_t dw_hdmi_qp_main_hardirq(int irq, void *dev_id)
 				 FLT_EXIT_TO_LTSL_IRQ);
 
 	dev_dbg(hdmi->dev, "i2c main unit irq:%#x\n", stat);
-	if (i2c->stat) {
+	if (i2c && i2c->stat) {
 		hdmi_writel(hdmi, i2c->stat, MAINUNIT_1_INT_CLEAR);
 		complete(&i2c->cmp);
 	}

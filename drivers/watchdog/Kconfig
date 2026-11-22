@@ -532,6 +532,16 @@ config DW_WATCHDOG
 	  To compile this driver as a module, choose M here: the
 	  module will be called dw_wdt.
 
+config DW_WATCHDOG_PRETIMEOUT_DEFAULT
+	bool "Synopsys DesignWare watchdog: pre-timeout ligado por padrão"
+	depends on DW_WATCHDOG && WATCHDOG_PRETIMEOUT_GOV
+	help
+	  Liga o modo de interrupção do dw-wdt já no probe, sem esperar o
+	  WDIOC_SETPRETIMEOUT do espaço de usuário: o primeiro estouro chama o
+	  governador de pré-timeout (com o governador "panic", panic e reinício
+	  normal) e só o segundo faz o reset de hardware. Precisa da IRQ do
+	  watchdog no DT.
+
 config EP93XX_WATCHDOG
 	tristate "EP93xx Watchdog"
 	depends on ARCH_EP93XX || COMPILE_TEST

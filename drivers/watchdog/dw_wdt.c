@@ -241,10 +241,21 @@ static int dw_wdt_set_timeout(struct watchdog_device *wdd, unsigned int top_s)
 	 * kernel(watchdog_dev.c) helps to feed watchdog before
 	 * wdd->max_hw_heartbeat_ms
 	 */
-	if (top_s * 1000 <= wdd->max_hw_heartbeat_ms)
+	if (top_s * 1000 <= dw_wdt_get_max_timeout_ms(dw_wdt) * dw_wdt->rmod)
 		wdd->timeout = timeout * dw_wdt->rmod;
 	else
 		wdd->timeout = top_s;
+
+	/*
+	 * In IRQ mode the first stage (one TOP) raises the pre-timeout. The core
+	 * keeps a hardware-running watchdog alive every max_hw_heartbeat_ms / 2,
+	 * so it has to be one TOP here; with the full two-stage timeout the ping
+	 * would land right on the pre-timeout.
+	 */
+	if (dw_wdt->rmod == DW_WDT_RMOD_IRQ)
+		wdd->max_hw_heartbeat_ms = timeout * MSEC_PER_SEC;
+	else
+		wdd->max_hw_heartbeat_ms = dw_wdt_get_max_timeout_ms(dw_wdt);
 
 	return 0;
 }
@@ -668,6 +679,14 @@ static int dw_wdt_drv_probe(struct platform_device *pdev)
 		/* Limit timeout value to hardware constraints. */
 		dw_wdt_set_timeout(wdd, wdd->timeout);
 	}
+
+	/*
+	 * Pre-timeout by default: the first expiry runs the pre-timeout governor
+	 * (panic, then a normal restart) and only the second one resets the SoC.
+	 */
+	if (IS_ENABLED(CONFIG_DW_WATCHDOG_PRETIMEOUT_DEFAULT) &&
+	    wdd->info == &dw_wdt_pt_ident)
+		dw_wdt_set_pretimeout(wdd, 1);
 
 	platform_set_drvdata(pdev, dw_wdt);
 

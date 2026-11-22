@@ -116,6 +116,9 @@ void *aicbsp_get_drvdata(void *args);
 int aicwf_sdio_writeb(struct aic_sdio_dev *sdiodev, uint regaddr, u8 val);
 void aicwf_sdio_hal_irqhandler(struct sdio_func *func);
 void aicwf_sdio_hal_irqhandler_func2(struct sdio_func *func);
+int aicwf_sdio_poll_rx(struct aic_sdio_dev *sdiodev);
+void aicwf_sdio_log_stats(void);
+void aicwf_sdio_dump_state(struct aic_sdio_dev *sdiodev);
 #if defined(CONFIG_SDIO_PWRCTRL)
 void aicwf_sdio_pwrctl_timer(struct aic_sdio_dev *sdiodev, uint duration);
 int aicwf_sdio_pwr_stctl(struct  aic_sdio_dev *sdiodev, uint target);

@@ -156,6 +156,7 @@ int aicbsp_set_subsys(int subsys, int state)
 	int cur_power_map;
 	int pre_power_state;
 	int cur_power_state;
+	int fw_err;
 
 	mutex_lock(&aicbsp_power_lock);
 	aicbsp_load_fw_in_fdrv = false;
@@ -177,7 +178,9 @@ int aicbsp_set_subsys(int subsys, int state)
 				goto err0;
 			if (aicbsp_sdio_init())
 				goto err1;
-			if (aicbsp_driver_fw_init(aicbsp_sdiodev))
+			fw_err = aicbsp_driver_fw_init(aicbsp_sdiodev);
+			aicbsp_log_cmd_stats();
+			if (fw_err)
 				goto err2;
 #ifndef CONFIG_FDRV_NO_REG_SDIO
 			aicbsp_sdio_release(aicbsp_sdiodev);
@@ -1407,60 +1410,21 @@ static void aicwf_sdio_enq_rxpkt(struct aic_sdio_dev *sdiodev, struct sk_buff *p
 
 #define SDIO_OTHER_INTERRUPT (0x1ul << 7)
 
-void aicwf_sdio_hal_irqhandler(struct sdio_func *func)
+/*
+ * HY300: contadores da carga do firmware (ver aicwf_sdio_poll_rx). No boot do kernel ACK que
+ * falhou cada resposta do chip demorou mais que a anterior (0,2 s, ~1 s, ~2 s) até estourar
+ * os 3 s; na fábrica cada uma leva cerca de 1 ms.
+ */
+static atomic_t aicbsp_sdio_irqs = ATOMIC_INIT(0);
+static atomic_t aicbsp_sdio_irqs_empty = ATOMIC_INIT(0);
+static atomic_t aicbsp_sdio_polled = ATOMIC_INIT(0);
+
+static void aicwf_sdio_handle_d80_int(struct aic_sdio_dev *sdiodev, u8 intstatus)
 {
-	struct aicwf_bus *bus_if = dev_get_drvdata(&func->dev);
-	struct aic_sdio_dev *sdiodev = bus_if->bus_priv.sdio;
-	u8 intstatus = 0;
 	u8 byte_len = 0;
 	struct sk_buff *pkt = NULL;
 	int ret;
 
-    //AICWFDBG(LOGDEBUG,"%s bsp enter \r\n", __func__);
-
-    if(aicbsp_sdiodev->sdio_hal_irqhandler){
-        aicbsp_sdiodev->sdio_hal_irqhandler(func);
-        return;
-    }
-
-	if (!bus_if || bus_if->state == BUS_DOWN_ST) {
-		sdio_err("bus err\n");
-		return;
-	}
-
-    if (sdiodev->chipid  == PRODUCT_ID_AIC8801 || sdiodev->chipid  == PRODUCT_ID_AIC8800DC ||
-        sdiodev->chipid  == PRODUCT_ID_AIC8800DW) {
-    	ret = aicwf_sdio_readb(sdiodev, sdiodev->sdio_reg.block_cnt_reg, &intstatus);
-
-    	while(intstatus){
-    	    sdiodev->rx_priv->data_len = intstatus * SDIOWIFI_FUNC_BLOCKSIZE;
-    	    if (intstatus > 0) {
-    	        if(intstatus < 64) {
-    	            pkt = aicwf_sdio_readframes(sdiodev, 0);
-    	        } else {
-    	            aicwf_sdio_intr_get_len_bytemode(sdiodev, &byte_len);//byte_len must<= 128
-    	            sdio_info("byte mode len=%d\r\n", byte_len);
-    	            pkt = aicwf_sdio_readframes(sdiodev, 0);
-    	        }
-    	    } else {
-    	#ifndef CONFIG_PLATFORM_ALLWINNER
-    	        sdio_err("Interrupt but no data\n");
-    	#endif
-    	    }
-
-    	    if (pkt)
-    	        aicwf_sdio_enq_rxpkt(sdiodev, pkt);
-
-    	    ret = aicwf_sdio_readb(sdiodev, sdiodev->sdio_reg.block_cnt_reg, &intstatus);
-    	}
-    }else if (sdiodev->chipid  == PRODUCT_ID_AIC8800D80) {
-        do {
-            ret = aicwf_sdio_readb(sdiodev, sdiodev->sdio_reg.misc_int_status_reg, &intstatus);
-            if (!ret) {
-                break;
-            }
-            sdio_err("ret=%d, intstatus=%x\r\n",ret, intstatus);
-        } while (1);
         if (intstatus & SDIO_OTHER_INTERRUPT) {
             u8 int_pending;
             ret = aicwf_sdio_readb(sdiodev, sdiodev->sdio_reg.sleep_reg, &int_pending);
@@ -1505,9 +1469,122 @@ void aicwf_sdio_hal_irqhandler(struct sdio_func *func)
 
         if (pkt)
             aicwf_sdio_enq_rxpkt(sdiodev, pkt);
+}
+
+void aicwf_sdio_hal_irqhandler(struct sdio_func *func)
+{
+	struct aicwf_bus *bus_if = dev_get_drvdata(&func->dev);
+	struct aic_sdio_dev *sdiodev = bus_if->bus_priv.sdio;
+	u8 intstatus = 0;
+	u8 byte_len = 0;
+	struct sk_buff *pkt = NULL;
+	int ret;
+
+    //AICWFDBG(LOGDEBUG,"%s bsp enter \r\n", __func__);
+
+    if(aicbsp_sdiodev->sdio_hal_irqhandler){
+        aicbsp_sdiodev->sdio_hal_irqhandler(func);
+        return;
+    }
+
+	if (!bus_if || bus_if->state == BUS_DOWN_ST) {
+		sdio_err("bus err\n");
+		return;
+	}
+	atomic_inc(&aicbsp_sdio_irqs);
+
+    if (sdiodev->chipid  == PRODUCT_ID_AIC8801 || sdiodev->chipid  == PRODUCT_ID_AIC8800DC ||
+        sdiodev->chipid  == PRODUCT_ID_AIC8800DW) {
+    	ret = aicwf_sdio_readb(sdiodev, sdiodev->sdio_reg.block_cnt_reg, &intstatus);
+
+    	while(intstatus){
+    	    sdiodev->rx_priv->data_len = intstatus * SDIOWIFI_FUNC_BLOCKSIZE;
+    	    if (intstatus > 0) {
+    	        if(intstatus < 64) {
+    	            pkt = aicwf_sdio_readframes(sdiodev, 0);
+    	        } else {
+    	            aicwf_sdio_intr_get_len_bytemode(sdiodev, &byte_len);//byte_len must<= 128
+    	            sdio_info("byte mode len=%d\r\n", byte_len);
+    	            pkt = aicwf_sdio_readframes(sdiodev, 0);
+    	        }
+    	    } else {
+    	#ifndef CONFIG_PLATFORM_ALLWINNER
+    	        sdio_err("Interrupt but no data\n");
+    	#endif
+    	    }
+
+    	    if (pkt)
+    	        aicwf_sdio_enq_rxpkt(sdiodev, pkt);
+
+    	    ret = aicwf_sdio_readb(sdiodev, sdiodev->sdio_reg.block_cnt_reg, &intstatus);
+    	}
+    }else if (sdiodev->chipid  == PRODUCT_ID_AIC8800D80) {
+        do {
+            ret = aicwf_sdio_readb(sdiodev, sdiodev->sdio_reg.misc_int_status_reg, &intstatus);
+            if (!ret) {
+                break;
+            }
+            sdio_err("ret=%d, intstatus=%x\r\n",ret, intstatus);
+        } while (1);
+        if (!intstatus)
+            atomic_inc(&aicbsp_sdio_irqs_empty);
+        aicwf_sdio_handle_d80_int(sdiodev, intstatus);
     }
 
 	complete(&bus_if->busrx_trgg);
+}
+
+/*
+ * HY300: lê por polling a resposta que a interrupção SDIO deveria ter avisado. Só no D80 e só
+ * enquanto o aic8800_bsp carrega o firmware (depois o aic8800_fdrv troca o tratador). Separa
+ * três casos quando a resposta atrasa: a interrupção não chega (o polling acha a resposta), o
+ * chip não respondeu (nada pendente) ou o barramento morreu (o CMD52 falha).
+ */
+int aicwf_sdio_poll_rx(struct aic_sdio_dev *sdiodev)
+{
+	u8 intstatus = 0;
+	int ret;
+
+	if (sdiodev->chipid != PRODUCT_ID_AIC8800D80 || sdiodev->sdio_hal_irqhandler ||
+	    sdiodev->bus_if->state == BUS_DOWN_ST)
+		return 0;
+
+	sdio_claim_host(sdiodev->func);
+	ret = aicwf_sdio_readb(sdiodev, sdiodev->sdio_reg.misc_int_status_reg, &intstatus);
+	if (!ret && intstatus)
+		aicwf_sdio_handle_d80_int(sdiodev, intstatus);
+	sdio_release_host(sdiodev->func);
+	if (ret || !intstatus)
+		return 0;
+
+	atomic_inc(&aicbsp_sdio_polled);
+	complete(&sdiodev->bus_if->busrx_trgg);
+	return 1;
+}
+
+void aicwf_sdio_log_stats(void)
+{
+	pr_info("aicbsp: interrupções SDIO %d (sem dado %d), respostas achadas por polling %d\n",
+		atomic_read(&aicbsp_sdio_irqs), atomic_read(&aicbsp_sdio_irqs_empty),
+		atomic_read(&aicbsp_sdio_polled));
+}
+
+/* HY300: retrato do chip e do barramento quando um comando estoura o tempo. */
+void aicwf_sdio_dump_state(struct aic_sdio_dev *sdiodev)
+{
+	struct mmc_host *host = sdiodev->func->card->host;
+	u8 status = 0, flow = 0, pending = 0;
+	int ret_status, ret_flow, ret_pending;
+
+	ret_status = aicwf_sdio_readb(sdiodev, sdiodev->sdio_reg.misc_int_status_reg, &status);
+	ret_flow = aicwf_sdio_readb(sdiodev, sdiodev->sdio_reg.flow_ctrl_reg, &flow);
+	ret_pending = aicwf_sdio_readb(sdiodev, sdiodev->sdio_reg.sleep_reg, &pending);
+	pr_info("aicbsp: chip: int_status 0x%02x (ret %d), flow_ctrl 0x%02x (ret %d), int_pending 0x%02x (ret %d)\n",
+		status, ret_status, flow, ret_flow, pending, ret_pending);
+	pr_info("aicbsp: host: %u Hz, timing %u, sdio_irqs %u, estado %s\n", host->ios.clock,
+		host->ios.timing, host->sdio_irqs,
+		sdiodev->state == SDIO_ACTIVE_ST ? "ativo" : "dormindo");
+	aicwf_sdio_log_stats();
 }
 
 void aicwf_sdio_hal_irqhandler_func2(struct sdio_func *func)

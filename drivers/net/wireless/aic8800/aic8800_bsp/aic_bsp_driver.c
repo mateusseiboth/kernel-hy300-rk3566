@@ -16,6 +16,7 @@
 #include <linux/delay.h>
 #include <linux/vmalloc.h>
 #include <linux/firmware.h>
+#include <linux/ktime.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 12, 0)
 #include <linux/hardirq.h>
@@ -59,8 +60,68 @@ static void cmd_complete(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
 	}
 }
 
+/*
+ * HY300: a resposta de cada comando é esperada em fatias de AICBSP_CFM_POLL_MS; entre uma e
+ * outra o aicwf_sdio_poll_rx lê o que a interrupção SDIO deveria ter avisado. Os primeiros
+ * comandos lentos saem no log com o tempo de envio e de resposta, e o resumo sai no fim da
+ * carga do firmware (aicbsp_log_cmd_stats).
+ */
+#define AICBSP_CFM_POLL_MS	50
+#define AICBSP_SLOW_CMD_MS	20
+#define AICBSP_SLOW_LOG_MAX	8
+
+static struct {
+	unsigned int cmds;
+	unsigned int slow;
+	unsigned int polled;
+	s64 max_ms;
+} aicbsp_cmd_stats;
+
+static long aicbsp_wait_cfm(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd,
+			    unsigned long tout, bool *polled)
+{
+	unsigned long deadline = jiffies + tout;
+	long left;
+
+	for (;;) {
+		left = wait_for_completion_killable_timeout(&cmd->complete,
+							    msecs_to_jiffies(AICBSP_CFM_POLL_MS));
+		if (left || time_after_eq(jiffies, deadline))
+			return left;
+		if (aicwf_sdio_poll_rx(cmd_mgr->sdiodev))
+			*polled = true;
+	}
+}
+
+static void aicbsp_note_cmd(const struct rwnx_cmd *cmd, ktime_t start, ktime_t sent, bool polled)
+{
+	s64 tx_ms = ktime_ms_delta(sent, start);
+	s64 total_ms = ktime_ms_delta(ktime_get(), start);
+
+	aicbsp_cmd_stats.cmds++;
+	aicbsp_cmd_stats.polled += polled;
+	aicbsp_cmd_stats.max_ms = max(aicbsp_cmd_stats.max_ms, total_ms);
+	if (total_ms < AICBSP_SLOW_CMD_MS)
+		return;
+	if (aicbsp_cmd_stats.slow++ < AICBSP_SLOW_LOG_MAX)
+		pr_info("aicbsp: tkn[%d] cmd %d lento: envio %lld ms, resposta %lld ms%s\n",
+			cmd->tkn, cmd->id, tx_ms, total_ms - tx_ms,
+			polled ? " (achada por polling)" : "");
+}
+
+void aicbsp_log_cmd_stats(void)
+{
+	pr_info("aicbsp: %u comandos, %u lentos (>= %d ms), %u com resposta por polling, maior espera %lld ms\n",
+		aicbsp_cmd_stats.cmds, aicbsp_cmd_stats.slow, AICBSP_SLOW_CMD_MS,
+		aicbsp_cmd_stats.polled, aicbsp_cmd_stats.max_ms);
+	aicwf_sdio_log_stats();
+}
+
 static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
 {
+	ktime_t start = ktime_get();
+	ktime_t sent = start;
+	bool polled = false;
 	bool defer_push = false;
 	int err = 0;
 
@@ -108,6 +169,7 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
 		rwnx_set_cmd_tx((void *)(cmd_mgr->sdiodev), cmd->a2e_msg, sizeof(struct lmac_msg) + cmd->a2e_msg->param_len);
 		//rwnx_ipc_msg_push(rwnx_hw, cmd, RWNX_CMD_A2EMSG_LEN(cmd->a2e_msg));
 		kfree(cmd->a2e_msg);
+		sent = ktime_get();
 	} else {
 		//WAKE_CMD_WORK(cmd_mgr);
 		printk("ERR: never defer push!!!!");
@@ -116,9 +178,10 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
 
 	if (!(cmd->flags & RWNX_CMD_FLAG_NONBLOCK)) {
 		unsigned long tout = msecs_to_jiffies(RWNX_80211_CMD_TIMEOUT_MS * cmd_mgr->queue_sz);
-		if (!wait_for_completion_killable_timeout(&cmd->complete, tout)) {
+		if (!aicbsp_wait_cfm(cmd_mgr, cmd, tout, &polled)) {
 			printk(KERN_CRIT"cmd timed-out\n");
 			cmd_dump(cmd);
+			aicwf_sdio_dump_state(cmd_mgr->sdiodev);
 			spin_lock_bh(&cmd_mgr->lock);
 			cmd_mgr->state = RWNX_CMD_MGR_STATE_CRASHED;
 			if (!(cmd->flags & RWNX_CMD_FLAG_DONE)) {
@@ -128,6 +191,7 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
 			spin_unlock_bh(&cmd_mgr->lock);
 			err = -ETIMEDOUT;
 		} else {
+			aicbsp_note_cmd(cmd, start, sent, polled);
 			kfree(cmd);
 		}
 	} else {

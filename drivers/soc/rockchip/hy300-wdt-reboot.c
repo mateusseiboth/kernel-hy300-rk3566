@@ -2,17 +2,13 @@
 /*
  * HY300 (RK3566): o reset do watchdog do SoC vira reinício, não desligamento.
  *
- * O dw-wdt aciona o reset global escolhido no CRU_GLB_RST_CON. No valor de reset
- * (bit 1 = 0) é o "second global reset", que no HY300 desliga o aparelho: só volta
- * pelo botão. O reinício por PSCI, panic ou sysrq b usa o "first global reset"
- * (CRU_GLB_SRST_FST) e volta normalmente. Com o bit 1 em 1 o watchdog usa o mesmo
- * reset do reinício normal.
- *
- * Layout do registrador como no RK3368/PX30 (U-Boot, cru_rk3368.h): bit 0 TSADC e
- * bit 1 WDT, 0 = second e 1 = first global reset. O TSADC (desligamento por
- * temperatura) fica como está. O registrador pode ou não ter a máscara de escrita
- * nos 16 bits altos; a escrita simples vale no primeiro caso e é ignorada no
- * segundo, e a com máscara só é tentada se a simples não pegou.
+ * O dw-wdt aciona o reset global configurado no CRU_GLB_RST_CON (CRU + 0xdc, TRM do
+ * RK3568 Part 1). No HY300 o valor que chega do U-Boot é 0x103: o bit 1
+ * (wdt_glb_srst_ctrl, watchdog -> first global reset) já vem ligado, mas o bit 4
+ * (pmu_srst_wdt_en) não, e o watchdog também reseta o PMU, o que desliga o aparelho
+ * (só volta pelo botão). Com os bits 1 e 4 o watchdog faz o mesmo reset do reinício
+ * normal. Medido no aparelho pelo kernel do Alpine: 0x103 -> 0x113 com escrita simples
+ * (o registrador não tem máscara de escrita nos 16 bits altos).
  */
 #include <linux/bits.h>
 #include <linux/init.h>
@@ -22,7 +18,9 @@
 
 #define RK3568_CRU_BASE		0xfdd20000
 #define RK3568_GLB_RST_CON	0xdc
-#define WDT_FIRST_GLB_SRST	BIT(1)
+#define WDT_FIRST_GLB_SRST	BIT(1)	/* wdt_glb_srst_ctrl */
+#define WDT_NO_PMU_SRST		BIT(4)	/* pmu_srst_wdt_en: o watchdog não reseta o PMU */
+#define WDT_REBOOT_BITS		(WDT_FIRST_GLB_SRST | WDT_NO_PMU_SRST)
 
 static int __init hy300_wdt_reboot_init(void)
 {
@@ -37,14 +35,12 @@ static int __init hy300_wdt_reboot_init(void)
 		return -ENOMEM;
 
 	before = readl(con);
-	writel(before | WDT_FIRST_GLB_SRST, con);
-	if (!(readl(con) & WDT_FIRST_GLB_SRST))
-		writel((WDT_FIRST_GLB_SRST << 16) | WDT_FIRST_GLB_SRST, con);
+	writel(before | WDT_REBOOT_BITS, con);
 	after = readl(con);
 	iounmap(con);
 
 	pr_info("hy300: watchdog com first global reset (CRU_GLB_RST_CON 0x%08x -> 0x%08x)%s\n",
-		before, after, after & WDT_FIRST_GLB_SRST ? "" : ": o bit não pegou");
+		before, after, (after & WDT_REBOOT_BITS) == WDT_REBOOT_BITS ? "" : ": os bits não pegaram");
 	return 0;
 }
 early_initcall(hy300_wdt_reboot_init);

@@ -430,6 +430,15 @@ source "drivers/soc/rockchip/minidump/Kconfig"
 
 endmenu
 
+config HY300_BUILTIN_DTB
+	bool "HY300: usar o DT embutido no kernel"
+	depends on ARM64 && OF_FLATTREE
+	help
+	  O U-Boot de fábrica do HY300 não funciona com o DT do 6.1 no
+	  resource.img. Com esta opção o resource leva o DT de fábrica e o kernel
+	  usa o rk3566-hy300 embutido, copiando do DT do U-Boot o /chosen, a
+	  memória e as reservas.
+
 config HY300_EARLY_BEACON
 	bool "HY300: liga a ventoinha e arma o watchdog no começo do boot"
 	depends on ARM64

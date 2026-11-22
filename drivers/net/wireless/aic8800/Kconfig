@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0
+config AIC8800
+	tristate "AICSemi AIC8800 (SDIO) Wi-Fi"
+	depends on MMC && CFG80211
+	help
+	  Driver da AICSemi para o AIC8800 por SDIO (aic8800_bsp e aic8800_fdrv), do SDK
+	  aic8800d_linux_sdk_V3.0_2023_1107_581567ff, na cópia GPL publicada pela Radxa
+	  (github.com/radxa-pkg/aic8800, tag 3.0+git20231107.581567ff-2).
+
+	  O firmware não vem junto: o aic8800_bsp lê os arquivos de aic_fw_path
+	  (padrão /lib/firmware/aic8800). Usado no HY300 (AIC8800D80).

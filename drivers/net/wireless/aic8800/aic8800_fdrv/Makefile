@@ -174,6 +174,11 @@ ccflags-$(CONFIG_RWNX_P2P_DEBUGFS) += -DCONFIG_RWNX_P2P_DEBUGFS
 # FW VARS
 ccflags-y += -DNX_VIRT_DEV_MAX=4
 
+# O kernel Android (ACK android14-6.1) traz do 6.3 o cfg80211 com punct_bitmap no aviso de
+# troca de canal; a versão do kernel continua 6.1, então a API é detectada no cabeçalho.
+AICWF_CFG80211_PUNCT := $(shell grep -qs 'u16 punct_bitmap' $(srctree)/include/net/cfg80211.h && echo y)
+ccflags-$(AICWF_CFG80211_PUNCT) += -DAICWF_CFG80211_PUNCT_BITMAP
+
 #for 8800D and DCDW u01
 #ccflags-y += -DNX_REMOTE_STA_MAX=10
 

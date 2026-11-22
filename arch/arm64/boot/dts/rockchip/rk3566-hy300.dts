@@ -855,3 +855,16 @@
 		};
 	};
 };
+
+/*
+ * GPU Mali-G52 para o Panfrost (o mali_kbase do BSP fica desligado). O Panfrost procura as
+ * interrupções em minúsculas e liga o segundo clock só pelo nome "bus"; sem o CLK_GPU ligado
+ * o acesso aos registradores da GPU trava o barramento. Mesmos nomes do rk356x.dtsi do
+ * mainline. Sem a tabela de OPP não há DVFS da GPU: ela fica no clock que o SCMI deixou e o
+ * vdd_fixed (compartilhado) nunca é mexido, como a CPU e a DDR neste kernel.
+ */
+&gpu {
+	interrupt-names = "gpu", "mmu", "job";
+	clock-names = "gpu", "bus";
+	/delete-property/ operating-points-v2;
+};

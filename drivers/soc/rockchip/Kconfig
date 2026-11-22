@@ -445,8 +445,10 @@ config HY300_EARLY_BEACON
 	help
 	  Só para testes de boot no projetor HY300 (RK3566), que não tem console
 	  serial. No começo do setup_arch liga a ventoinha (sinal de que o kernel
-	  começou) e arma o watchdog do SoC com cerca de 89 s, para que um
-	  travamento termine num reset quente com o pstore preservado.
+	  começou), faz o reset do watchdog reiniciar em vez de desligar
+	  (CRU_GLB_RST_CON: first global reset, sem resetar o PMU) e arma o
+	  watchdog do SoC com cerca de 89 s, para que um travamento termine num
+	  reset quente com o pstore preservado.
 
 config HY300_CRASH_TO_RECOVERY
 	bool "HY300: panic e travamento voltam pela partição recovery"

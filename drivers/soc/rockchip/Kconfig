@@ -430,4 +430,13 @@ source "drivers/soc/rockchip/minidump/Kconfig"
 
 endmenu
 
+config HY300_EARLY_BEACON
+	bool "HY300: liga a ventoinha e arma o watchdog no começo do boot"
+	depends on ARM64
+	help
+	  Só para testes de boot no projetor HY300 (RK3566), que não tem console
+	  serial. No começo do setup_arch liga a ventoinha (sinal de que o kernel
+	  começou) e arma o watchdog do SoC com cerca de 89 s, para que um
+	  travamento termine num reset quente com o pstore preservado.
+
 endif

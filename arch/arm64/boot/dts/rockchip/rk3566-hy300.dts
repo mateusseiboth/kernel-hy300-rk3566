@@ -515,7 +515,13 @@
 /*
  * eMMC. A fábrica roda em HS200 a 150 MHz (dmesg: "new HS200 MMC card").
  */
+/*
+ * O U-Boot de fábrica troca o próprio DT por este (rk-kernel.dtb do resource) antes de ler
+ * a imagem e só conhece o eMMC por "snps,dwcmshc-sdhci". Sem ele o U-Boot perde o eMMC e
+ * trava antes do logo. O kernel usa o primeiro compatible.
+ */
 &sdhci {
+	compatible = "rockchip,rk3568-dwcmshc", "snps,dwcmshc-sdhci";
 	max-frequency = <150000000>;
 	mmc-hs200-1_8v;
 };

@@ -439,6 +439,14 @@ config HY300_BUILTIN_DTB
 	  usa o rk3566-hy300 embutido, copiando do DT do U-Boot o /chosen, a
 	  memória e as reservas.
 
+config HY300_WDT_REBOOT
+	bool "HY300: reset do watchdog reinicia em vez de desligar"
+	depends on ARM64
+	help
+	  No HY300 (RK3566) o reset do watchdog do SoC desliga o aparelho. Esta
+	  opção põe o watchdog no mesmo reset global do reinício normal
+	  (CRU_GLB_RST_CON), para um travamento terminar em reinício.
+
 config HY300_EARLY_BEACON
 	bool "HY300: liga a ventoinha e arma o watchdog no começo do boot"
 	depends on ARM64

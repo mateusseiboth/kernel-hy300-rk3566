@@ -3,6 +3,7 @@
 # Rockchip Soc drivers
 #
 obj-$(CONFIG_HY300_EARLY_BEACON) += hy300-early-beacon.o
+obj-$(CONFIG_HY300_WDT_REBOOT) += hy300-wdt-reboot.o
 obj-$(CONFIG_HY300_BUILTIN_DTB) += hy300-builtin-dtb.o hy300-builtin.dtb.o
 obj-$(CONFIG_ROCKCHIP_AOA_MIDDLEWARE) += aoa_middleware/
 obj-$(CONFIG_ROCKCHIP_AMP) += rockchip_amp.o

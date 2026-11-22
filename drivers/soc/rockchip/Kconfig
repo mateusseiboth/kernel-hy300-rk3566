@@ -448,4 +448,13 @@ config HY300_EARLY_BEACON
 	  começou) e arma o watchdog do SoC com cerca de 89 s, para que um
 	  travamento termine num reset quente com o pstore preservado.
 
+config HY300_CRASH_TO_RECOVERY
+	bool "HY300: panic e travamento voltam pela partição recovery"
+	depends on ARM64
+	help
+	  Com hy300.crash_to_recovery=1 na cmdline, grava o modo recovery no
+	  registrador do reboot-mode logo no boot e de novo num panic. Um kernel na
+	  partição boot que trave ou dê panic volta pela recovery em vez de entrar
+	  em laço. Sem o parâmetro, nada muda.
+
 endif

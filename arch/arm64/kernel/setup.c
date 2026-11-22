@@ -57,6 +57,10 @@
 #include <asm/mmu_context.h>
 
 static int num_standard_resources;
+
+#ifdef CONFIG_HY300_EARLY_BEACON
+void __init hy300_early_beacon(void);
+#endif
 static struct resource *standard_resources;
 struct hypervisor_ops hyp_ops;
 
@@ -307,6 +311,9 @@ void __init __no_sanitize_address setup_arch(char **cmdline_p)
 
 	early_fixmap_init();
 	early_ioremap_init();
+#ifdef CONFIG_HY300_EARLY_BEACON
+	hy300_early_beacon();
+#endif
 
 	setup_machine_fdt(__fdt_pointer);
 

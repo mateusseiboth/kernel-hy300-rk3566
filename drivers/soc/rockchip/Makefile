@@ -2,6 +2,7 @@
 #
 # Rockchip Soc drivers
 #
+obj-$(CONFIG_HY300_EARLY_BEACON) += hy300-early-beacon.o
 obj-$(CONFIG_ROCKCHIP_AOA_MIDDLEWARE) += aoa_middleware/
 obj-$(CONFIG_ROCKCHIP_AMP) += rockchip_amp.o
 obj-$(CONFIG_ROCKCHIP_AMP_RPMSG_FILE) += rockchip_amp_rpmsg_file.o

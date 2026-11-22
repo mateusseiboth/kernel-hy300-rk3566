@@ -189,6 +189,19 @@ struct panel_desc {
 	int (*spi_write)(struct device *dev, const u8 *data, size_t len, u8 type);
 };
 
+/*
+ * HY300 (TXCZ): o controlador do painel LCD é configurado por SPI de 3 fios em bit-bang, como
+ * no panel_simple_probe do kernel de fábrica: 8 bits por byte, MSB primeiro, dado posto antes
+ * da borda de subida do clock, CS baixo durante cada quadro e o strobe baixo durante a
+ * sequência inteira. A sequência vem do DT (hy300,spi-init-sequence: atraso em ms, tamanho e
+ * bytes de cada quadro). Os níveis são brutos, como na fábrica.
+ */
+struct hy300_spi {
+	struct gpio_desc *sdi, *scl, *cs, *stb;
+	const u8 *seq;
+	int len;
+};
+
 struct panel_simple {
 	struct drm_panel base;
 	struct mipi_dsi_device *dsi;
@@ -211,6 +224,8 @@ struct panel_simple {
 
 	struct gpio_desc *enable_gpio;
 	struct gpio_desc *reset_gpio;
+
+	struct hy300_spi hy300;
 
 	struct edid *edid;
 
@@ -373,6 +388,79 @@ static int panel_simple_xfer_spi_cmd_seq(struct panel_simple *panel, struct pane
 	}
 
 	return 0;
+}
+
+static void hy300_spi_write_byte(struct hy300_spi *spi, u8 byte)
+{
+	int bit;
+
+	for (bit = 7; bit >= 0; bit--) {
+		udelay(1);
+		gpiod_direction_output_raw(spi->sdi, (byte >> bit) & 1);
+		gpiod_direction_output_raw(spi->scl, 0);
+		udelay(2);
+		gpiod_direction_output_raw(spi->scl, 1);
+	}
+}
+
+static void hy300_spi_write_frame(struct hy300_spi *spi, const u8 *data, int len)
+{
+	int i;
+
+	gpiod_direction_output_raw(spi->cs, 0);
+	udelay(10);
+	for (i = 0; i < len; i++)
+		hy300_spi_write_byte(spi, data[i]);
+	udelay(10);
+	gpiod_direction_output_raw(spi->cs, 1);
+	gpiod_direction_output_raw(spi->sdi, 1);
+	gpiod_direction_output_raw(spi->scl, 1);
+}
+
+static void hy300_spi_send_init(struct device *dev, struct hy300_spi *spi)
+{
+	int off = 0, frames = 0;
+
+	gpiod_direction_output_raw(spi->stb, 1);
+	gpiod_direction_output_raw(spi->cs, 1);
+	gpiod_direction_output_raw(spi->stb, 0);
+	while (off + 2 <= spi->len && off + 2 + spi->seq[off + 1] <= spi->len) {
+		hy300_spi_write_frame(spi, &spi->seq[off + 2], spi->seq[off + 1]);
+		if (spi->seq[off])
+			msleep(spi->seq[off]);
+		off += 2 + spi->seq[off + 1];
+		frames++;
+	}
+	gpiod_direction_output_raw(spi->sdi, 0);
+	gpiod_direction_output_raw(spi->scl, 0);
+	gpiod_direction_output_raw(spi->stb, 1);
+	dev_info(dev, "hy300: painel configurado por SPI (%d quadros)\n", frames);
+}
+
+static int hy300_spi_get_gpio(struct device *dev, const char *name, struct gpio_desc **gpio)
+{
+	*gpio = devm_gpiod_get(dev, name, GPIOD_ASIS);
+	if (IS_ERR(*gpio))
+		return dev_err_probe(dev, PTR_ERR(*gpio), "hy300: falta o GPIO %s\n", name);
+	return 0;
+}
+
+/* Sem hy300,spi-init-sequence no DT nada muda. */
+static int hy300_spi_get(struct device *dev, struct hy300_spi *spi)
+{
+	int err;
+
+	spi->seq = of_get_property(dev->of_node, "hy300,spi-init-sequence", &spi->len);
+	if (!spi->seq)
+		return 0;
+	err = hy300_spi_get_gpio(dev, "spi-sdi", &spi->sdi);
+	if (!err)
+		err = hy300_spi_get_gpio(dev, "spi-scl", &spi->scl);
+	if (!err)
+		err = hy300_spi_get_gpio(dev, "spi-cs", &spi->cs);
+	if (!err)
+		err = hy300_spi_get_gpio(dev, "hy300,stb", &spi->stb);
+	return err;
 }
 
 static unsigned int panel_simple_get_timings_modes(struct panel_simple *panel,
@@ -629,6 +717,9 @@ static int panel_simple_prepare(struct drm_panel *panel)
 
 	if (p->desc->delay.init)
 		panel_simple_msleep(p->desc->delay.init);
+
+	if (p->hy300.seq)
+		hy300_spi_send_init(panel->dev, &p->hy300);
 
 	if (p->desc->init_seq) {
 		if (p->desc->cmd_type == CMD_TYPE_SPI) {
@@ -910,6 +1001,10 @@ static int panel_simple_probe(struct device *dev, const struct panel_desc *desc)
 			dev_err(dev, "failed to get reset GPIO: %d\n", err);
 		return err;
 	}
+
+	err = hy300_spi_get(dev, &panel->hy300);
+	if (err)
+		return err;
 
 	err = of_drm_get_panel_orientation(dev->of_node, &panel->orientation);
 	if (err) {

@@ -149,12 +149,16 @@
 			retain-state-suspended;
 		};
 
-		/* Ventoinha: precisa estar ligada desde o boot. */
+		/*
+		 * Ventoinha: precisa estar ligada desde o boot e continuar ligada no shutdown
+		 * (sem retain-state-shutdown o gpio-leds a apaga antes do reboot).
+		 */
 		Fan_h {
 			gpios = <&gpio0 RK_PB5 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "none";
 			default-state = "on";
 			retain-state-suspended;
+			retain-state-shutdown;
 		};
 
 		Lcd_power {

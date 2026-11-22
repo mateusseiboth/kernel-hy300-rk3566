@@ -57,6 +57,9 @@ static int num_standard_resources;
 #ifdef CONFIG_HY300_EARLY_BEACON
 void __init hy300_early_beacon(void);
 #endif
+#ifdef CONFIG_HY300_BUILTIN_DTB
+void * __init hy300_builtin_fdt(void *boot);
+#endif
 static struct resource *standard_resources;
 
 phys_addr_t __fdt_pointer __initdata;
@@ -190,6 +193,10 @@ static void __init setup_machine_fdt(phys_addr_t dt_phys)
 
 	if (dt_virt)
 		memblock_reserve(dt_phys, size);
+#ifdef CONFIG_HY300_BUILTIN_DTB
+	if (dt_virt)
+		dt_virt = hy300_builtin_fdt(dt_virt);
+#endif
 
 	if (!dt_virt || !early_init_dt_scan(dt_virt)) {
 		pr_crit("\n"

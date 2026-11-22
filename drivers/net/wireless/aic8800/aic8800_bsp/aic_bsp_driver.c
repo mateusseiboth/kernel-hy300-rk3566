@@ -1870,6 +1870,15 @@ int aicbsp_driver_fw_init(struct aic_sdio_dev *sdiodev)
 	return 0;
 }
 
+/*
+ * HY300: clock do SDIO em Hz (0 = o padrão do driver, 150 MHz para o D80). No kernel ACK os
+ * 150 MHz valem de verdade e o envio do firmware estoura o tempo; o Android de fábrica roda
+ * o barramento a 50 MHz.
+ */
+static int sdio_clock;
+module_param(sdio_clock, int, 0444);
+MODULE_PARM_DESC(sdio_clock, "Clock do SDIO em Hz (0 = padrão do driver)");
+
 int aicbsp_get_feature(struct aicbsp_feature_t *feature, char *fw_path)
 {
 	if (aicbsp_sdiodev->chipid == PRODUCT_ID_AIC8801 ||
@@ -1879,6 +1888,8 @@ int aicbsp_get_feature(struct aicbsp_feature_t *feature, char *fw_path)
 	}else if (aicbsp_sdiodev->chipid == PRODUCT_ID_AIC8800D80){
         feature->sdio_clock = FEATURE_SDIO_CLOCK_V3;
 	}
+	if (sdio_clock > 0)
+		feature->sdio_clock = sdio_clock;
 	feature->sdio_phase = FEATURE_SDIO_PHASE;
 	feature->hwinfo     = aicbsp_info.hwinfo;
 	feature->fwlog_en   = aicbsp_info.fwlog_en;

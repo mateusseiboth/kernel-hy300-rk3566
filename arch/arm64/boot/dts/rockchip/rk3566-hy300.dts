@@ -1,0 +1,811 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Projetor "HY300", variante Rockchip RK3566 com a ROM TXCZ LightOS
+ * (placa rk3566_y356tx).
+ *
+ * O fabricante não publicou o fonte do kernel. Este DT foi reconstruído a partir do
+ * DTB de fábrica (rk-kernel.dtb do resource.img, kernel 4.19.232): a TXCZ partiu da
+ * placa de referência RK3566 BOX DEMO V10, então a base é a mesma placa no BSP 6.1
+ * e aqui ficam só as diferenças. A comparação nó a nó com o DTB de fábrica é feita
+ * com tools/dtnorm.py do repositório hy300-rk3566 (docs/kernel-6.1.md).
+ *
+ * Sem PMIC: a placa usa reguladores discretos, com vdd_cpu e vdd_logic por PWM.
+ */
+
+/dts-v1/;
+
+#include "rk3566-box-demo-v10.dtsi"
+#include "rk3568-android.dtsi"
+
+/ {
+	model = "HY300 Projector (RK3566, TXCZ y356tx)";
+	/* Igual ao de fábrica: o U-Boot e o userspace da TXCZ não conhecem outro. */
+	compatible = "rockchip,rk3566-box-demo-v10", "rockchip,rk3566";
+
+	/*
+	 * Teclas do painel do projetor no canal 1 do SARADC (a placa de referência usa o
+	 * canal 0 com volume + e -).
+	 */
+	adc-keys {
+		io-channels = <&saradc 1>;
+		status = "okay";
+
+		/delete-node/ vol-up-key;
+		/delete-node/ vol-down-key;
+
+		back-key {
+			label = "back";
+			linux,code = <KEY_BACK>;
+			press-threshold-microvolt = <500>;
+		};
+
+		down-key {
+			label = "down";
+			linux,code = <KEY_DOWN>;
+			press-threshold-microvolt = <980>;
+		};
+
+		left-key {
+			label = "left";
+			linux,code = <KEY_LEFT>;
+			press-threshold-microvolt = <320>;
+		};
+
+		ok-key {
+			label = "ok";
+			linux,code = <KEY_ENTER>;
+			press-threshold-microvolt = <160>;
+		};
+
+		right-key {
+			label = "right";
+			linux,code = <KEY_RIGHT>;
+			press-threshold-microvolt = <40>;
+		};
+
+		up-key {
+			label = "up";
+			linux,code = <KEY_UP>;
+			press-threshold-microvolt = <1345>;
+		};
+	};
+
+	/* Brilho do LED do projetor (PWM4, 40 kHz). */
+	backlight: backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pwm4 0 25000 0>;
+		brightness-levels = <
+			  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
+			 16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31
+			 32  33  34  35  36  37  38  39  40  41  42  43  44  45  46  47
+			 48  49  50  51  52  53  54  55  56  57  58  59  60  61  62  63
+			 64  65  66  67  68  69  70  71  72  73  74  75  76  77  78  79
+			 80  81  82  83  84  85  86  87  88  89  90  91  92  93  94  95
+			 96  97  98  99 100 101 102 103 104 105 106 107 108 109 110 111
+			112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127
+			128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143
+			144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159
+			160 161 162 163 164 165 166 167 168 169 170 171 172 173 174 175
+			176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191
+			192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207
+			208 209 210 211 212 213 214 215 216 217 218 219 220 221 222 223
+			224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239
+			240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255>;
+		default-brightness-level = <200>;
+	};
+
+	/* Codec "mudo" para o I2S1 (áudio interno, amplificador sem controle). */
+	dummy_codec: dummy-codec {
+		compatible = "rockchip,dummy-codec";
+		#sound-dai-cells = <0>;
+		clocks = <&cru I2S1_MCLKOUT>;
+		clock-names = "mclk";
+		assigned-clocks = <&cru I2S1_MCLKOUT>, <&cru I2S1_MCLK_TX_IOE>;
+		assigned-clock-rates = <12288000>;
+		assigned-clock-parents = <&cru I2S1_MCLKOUT_TX>, <&cru I2S1_MCLKOUT_TX>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&i2s1m0_mclk>;
+		status = "okay";
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+		autorepeat;
+		status = "okay";
+
+		/*
+		 * Botão de liga/desliga. Mesmo pino do LED "green" abaixo (GPIO1_B0), como no
+		 * DT de fábrica.
+		 */
+		power-key {
+			label = "GPIO Key Home";
+			interrupt-parent = <&gpio1>;
+			interrupts = <RK_PB0 IRQ_TYPE_NONE>;
+			linux,input-type = <EV_KEY>;
+			linux,code = <KEY_POWER>;
+			debounce-interval = <10>;
+		};
+	};
+
+	/*
+	 * LEDs, ventoinha e alimentação do painel são saídas simples. Os nomes são os
+	 * da TXCZ: o app de configurações acessa /sys/class/leds/<nome>.
+	 */
+	gpio-leds {
+		/delete-node/ ir-led;
+		/delete-node/ work-led;
+
+		green {
+			gpios = <&gpio1 RK_PB0 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "none";
+			default-state = "on";
+			retain-state-suspended;
+		};
+
+		red {
+			gpios = <&gpio1 RK_PB1 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "none";
+			default-state = "on";
+			retain-state-suspended;
+		};
+
+		/* Ventoinha: precisa estar ligada desde o boot. */
+		Fan_h {
+			gpios = <&gpio0 RK_PB5 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "none";
+			default-state = "on";
+			retain-state-suspended;
+		};
+
+		Lcd_power {
+			gpios = <&gpio0 RK_PC4 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "none";
+			default-state = "keep";
+			retain-state-suspended;
+		};
+	};
+
+	/* Codec "mudo" do lado do RK628 (áudio da entrada HDMI). */
+	hdmi_in_codec: hdmi-codec {
+		compatible = "rockchip,dummy-codec";
+		#sound-dai-cells = <0>;
+		status = "okay";
+	};
+
+	hdmi-in-sound {
+		compatible = "simple-audio-card";
+		simple-audio-card,format = "i2s";
+		simple-audio-card,name = "rockchip,hdmiin";
+		simple-audio-card,bitclock-master = <&hdmiin_codec_dai>;
+		simple-audio-card,frame-master = <&hdmiin_codec_dai>;
+		status = "okay";
+
+		simple-audio-card,cpu {
+			sound-dai = <&i2s3_2ch>;
+		};
+
+		hdmiin_codec_dai: simple-audio-card,codec {
+			sound-dai = <&hdmi_in_codec>;
+		};
+	};
+
+	/*
+	 * Painel LVDS 1024x600. O Android de fábrica renderiza em 1280x720 e o HWC reduz.
+	 * As linhas spi-* são do controlador do painel (a TXCZ não usa no kernel).
+	 */
+	panel: panel {
+		compatible = "simple-panel";
+		power-supply = <&vcc_3v3>;
+		enable-delay-ms = <20>;
+		prepare-delay-ms = <20>;
+		unprepare-delay-ms = <20>;
+		disable-delay-ms = <20>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&lcd_rst_gpio &lcd_enable_gpio &lcd_sda &lcd_scl &lcd_cs &lcd_stb>;
+		spi-sdi-gpios = <&gpio1 RK_PD5 GPIO_ACTIVE_LOW>;
+		spi-scl-gpios = <&gpio1 RK_PD6 GPIO_ACTIVE_HIGH>;
+		spi-cs-gpios = <&gpio1 RK_PD7 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio2 RK_PA1 GPIO_ACTIVE_LOW>;
+		enable-gpios = <&gpio2 RK_PA2 GPIO_ACTIVE_HIGH>;
+		width-mm = <217>;
+		height-mm = <136>;
+
+		display-timings {
+			native-mode = <&timing0>;
+
+			timing0: timing0 {
+				clock-frequency = <40195000>;
+				hactive = <1024>;
+				vactive = <600>;
+				hback-porch = <20>;
+				hfront-porch = <20>;
+				vback-porch = <4>;
+				vfront-porch = <10>;
+				hsync-len = <20>;
+				vsync-len = <4>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
+		};
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				dual-lvds-even-pixels;
+
+				panel_in_lvds: endpoint {
+					remote-endpoint = <&lvds_out_panel>;
+				};
+			};
+		};
+	};
+
+	/* Áudio interno: I2S1 -> codec mudo. */
+	rockchip-i2s-sound {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "rockchip,rockchip-i2s-sound";
+		simple-audio-card,format = "i2s";
+		simple-audio-card,mclk-fs = <256>;
+		status = "okay";
+
+		simple-audio-card,cpu {
+			sound-dai = <&i2s1_8ch>;
+		};
+
+		simple-audio-card,codec {
+			sound-dai = <&dummy_codec>;
+		};
+	};
+
+	/*
+	 * Motor de foco. No DT de fábrica o nó não tem propriedades: o driver fechado da
+	 * TXCZ (rk_motor/usb-cam-gpio, /sys/class/motor_cc) fixa os pinos no código.
+	 * Não existe driver no 6.1; o nó fica para documentar a compatibilidade.
+	 */
+	rk_motor {
+		compatible = "rk_motor", "usb-cam-gpio";
+	};
+};
+
+/* Saída HDMI não existe nesta placa: a imagem vai para o LVDS. */
+&hdmi {
+	status = "disabled";
+};
+
+&hdmi_in_vp0 {
+	status = "disabled";
+};
+
+&hdmi_sound {
+	status = "disabled";
+};
+
+&route_hdmi {
+	status = "disabled";
+};
+
+&route_lvds {
+	status = "okay";
+	connect = <&vp1_out_lvds>;
+};
+
+&lvds {
+	status = "okay";
+
+	ports {
+		port@1 {
+			reg = <1>;
+
+			lvds_out_panel: endpoint {
+				remote-endpoint = <&panel_in_lvds>;
+			};
+		};
+	};
+};
+
+&lvds_in_vp1 {
+	status = "okay";
+};
+
+/*
+ * Como na fábrica, o VOP não mexe na tensão do vdd_logic: sem a tabela de OPP do 6.1
+ * (que desce o vdd_logic para 0,875-0,95 V conforme o clock do VOP).
+ */
+&vop {
+	/delete-property/ vop-supply;
+	/delete-property/ operating-points-v2;
+	/delete-property/ rockchip,aclk-normal-mode-rates;
+	/delete-property/ rockchip,aclk-advanced-mode-rates;
+};
+
+/* Backlight. */
+&pwm4 {
+	status = "okay";
+};
+
+/*
+ * Controle remoto: a TXCZ usa o PWM3 (a placa de referência usa o PWM15). As tabelas
+ * são as do DT de fábrica, na mesma ordem.
+ */
+&pwm3 {
+	compatible = "rockchip,remotectl-pwm";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pwm3_pins>;
+	remote_pwm_id = <3>;
+	handle_cpu_id = <1>;
+	remote_support_psci = <0>;
+	status = "okay";
+
+	ir_key1 {
+		rockchip,usercode = <0xdf00>;
+		rockchip,key_table =
+			<0xab	KEY_1>,
+			<0xe9	KEY_2>,
+			<0xea	KEY_3>,
+			<0xaf	KEY_4>,
+			<0xed	KEY_5>,
+			<0xb3	KEY_7>,
+			<0xf1	KEY_8>,
+			<0xf2	KEY_9>,
+			<0xf3	KEY_0>,
+			<0xe3	KEY_POWER>,
+			<0xe7	KEY_MENU>,
+			<0xfc	KEY_HOME>,
+			<0xf5	KEY_BACK>,
+			<0xb0	KEY_VOLUMEDOWN>,
+			<0xb4	KEY_VOLUMEUP>,
+			<0xa5	KEY_MUTE>,
+			<0xf9	KEY_REPLY>,
+			<0xe5	KEY_UP>,
+			<0xb7	KEY_DOWN>,
+			<0xb8	KEY_LEFT>,
+			<0xf8	KEY_RIGHT>,
+			<0xef	KEY_F7>,
+			<0xee	KEY_TEXT>,
+			<0xa2	KEY_F11>,
+			<0xa3	KEY_F12>,
+			<0xe4	KEY_F15>,
+			<0xb6	KEY_F16>,
+			<0xa0	KEY_REDO>,
+			<0x8b	KEY_F14>,
+			<0xbd	KEY_F17>;
+	};
+
+	ir_key2 {
+		rockchip,usercode = <0xfe01>;
+		rockchip,key_table =
+			<0xbf	KEY_POWER>,
+			<0xb3	KEY_MENU>,
+			<0xee	KEY_HOME>,
+			<0xe6	KEY_BACK>,
+			<0xef	KEY_VOLUMEDOWN>,
+			<0xe7	KEY_VOLUMEUP>,
+			<0xec	KEY_REPLY>,
+			<0xe9	KEY_UP>,
+			<0xe5	KEY_DOWN>,
+			<0xae	KEY_LEFT>,
+			<0xaf	KEY_RIGHT>,
+			<0xf0	KEY_F17>,
+			<0xbe	KEY_MUTE>,
+			<0xbc	KEY_F18>,
+			<0xff	KEY_TEXT>;
+	};
+
+	ir_key3 {
+		rockchip,usercode = <0xf708>;
+		rockchip,key_table =
+			<0xf4	KEY_POWER>,
+			<0xe8	KEY_MENU>,
+			<0xbd	KEY_HOME>,
+			<0xbe	KEY_BACK>,
+			<0xe3	KEY_VOLUMEDOWN>,
+			<0xf1	KEY_VOLUMEUP>,
+			<0xe1	KEY_REPLY>,
+			<0xed	KEY_UP>,
+			<0xec	KEY_DOWN>,
+			<0xea	KEY_LEFT>,
+			<0x07	KEY_KPRIGHTPAREN>,
+			<0x0e	KEY_F14>,
+			<0xeb	KEY_RIGHT>;
+	};
+
+	ir_key4 {
+		rockchip,usercode = <0xfc03>;
+		rockchip,key_table =
+			<0xe2	KEY_POWER>,
+			<0xe1	KEY_MENU>,
+			<0xf1	KEY_HOME>,
+			<0xf2	KEY_BACK>,
+			<0xea	KEY_VOLUMEDOWN>,
+			<0xee	KEY_VOLUMEUP>,
+			<0xf4	KEY_REPLY>,
+			<0xf6	KEY_UP>,
+			<0xfe	KEY_DOWN>,
+			<0xf5	KEY_LEFT>,
+			<0xf7	KEY_RIGHT>,
+			<0xe6	KEY_F17>,
+			<0xfd	KEY_MUTE>,
+			<0xf8	KEY_F18>,
+			<0xfa	KEY_TEXT>;
+	};
+
+	ir_key5 {
+		rockchip,usercode = <0xff00>;
+		rockchip,key_table =
+			<0xeb	KEY_POWER>,
+			<0xec	KEY_MENU>,
+			<0xb7	KEY_HOME>,
+			<0xa3	KEY_BACK>,
+			<0xa7	KEY_VOLUMEDOWN>,
+			<0xf4	KEY_VOLUMEUP>,
+			<0xf8	KEY_REPLY>,
+			<0xfc	KEY_UP>,
+			<0xfd	KEY_DOWN>,
+			<0xf1	KEY_LEFT>,
+			<0xe5	KEY_RIGHT>,
+			<0x6c	KEY_F17>,
+			<0xfe	KEY_MUTE>,
+			<0x67	KEY_F18>,
+			<0x7d	KEY_TEXT>;
+	};
+
+	ir_key6 {
+		rockchip,usercode = <0x707>;
+		rockchip,key_table =
+			<0xab	KEY_1>,
+			<0xe9	KEY_2>,
+			<0xea	KEY_3>,
+			<0xaf	KEY_4>,
+			<0xb3	KEY_7>,
+			<0xf1	KEY_8>,
+			<0xf2	KEY_9>,
+			<0xf3	KEY_0>,
+			<0xfd	KEY_POWER>,
+			<0xe5	KEY_MENU>,
+			<0xc1	KEY_HOME>,
+			<0xd2	KEY_BACK>,
+			<0xf4	KEY_VOLUMEDOWN>,
+			<0xf8	KEY_VOLUMEUP>,
+			<0xf0	KEY_MUTE>,
+			<0x97	KEY_REPLY>,
+			<0x9f	KEY_UP>,
+			<0x9e	KEY_DOWN>,
+			<0x9a	KEY_LEFT>,
+			<0x9d	KEY_RIGHT>,
+			<0x7d	KEY_TEXT>,
+			<0xa2	KEY_F11>,
+			<0xa3	KEY_F17>,
+			<0xed	KEY_F15>,
+			<0xef	KEY_F16>,
+			<0xa0	KEY_REDO>,
+			<0x8b	KEY_F14>,
+			<0x77	KEY_F19>;
+	};
+};
+
+/* PWM15 volta a ser um PWM comum (desligado), como na fábrica. */
+&pwm15 {
+	compatible = "rockchip,rk3568-pwm", "rockchip,rk3328-pwm";
+	pinctrl-names = "active";
+	pinctrl-0 = <&pwm15m0_pins>;
+	/delete-property/ remote_pwm_id;
+	/delete-property/ handle_cpu_id;
+	/delete-property/ remote_support_psci;
+	status = "disabled";
+
+	/delete-node/ ir_key1;
+	/delete-node/ ir_key2;
+	/delete-node/ ir_key3;
+};
+
+/* Teclas do painel. */
+&saradc {
+	status = "okay";
+};
+
+/*
+ * eMMC. A fábrica roda em HS200 a 150 MHz (dmesg: "new HS200 MMC card").
+ */
+&sdhci {
+	max-frequency = <150000000>;
+	mmc-hs200-1_8v;
+};
+
+/* SDIO do Wi-Fi (AIC8800): a fábrica limita a 50 MHz. */
+&sdmmc1 {
+	max-frequency = <50000000>;
+};
+
+/*
+ * Acelerômetro do keystone automático. O chip presente é o SC7A20 (0x19; o dmesg de
+ * fábrica lê o id 0x11), com driver no 6.1 (GS_SC7A20). QMI8658 e MMA7660 são
+ * alternativas da TXCZ para outras montagens e falham no probe, como na fábrica.
+ */
+&i2c0 {
+	clock-frequency = <100000>;
+	status = "okay";
+
+	qmi8658_acc@6b {
+		compatible = "qmi8658_acc";
+		reg = <0x6b>;
+		irq_enable = <0>;
+		poll_delay_ms = <30>;
+		type = <SENSOR_TYPE_ACCEL>;
+		layout = <1>;
+		reprobe_en = <1>;
+		status = "okay";
+	};
+
+	qmi8658_gyro@6b {
+		compatible = "qmi8658_gyro";
+		reg = <0x6b>;
+		irq_enable = <0>;
+		poll_delay_ms = <30>;
+		type = <SENSOR_TYPE_GYROSCOPE>;
+		layout = <1>;
+		reprobe_en = <1>;
+		status = "okay";
+	};
+
+	sc7a20_acc@19 {
+		compatible = "gs_sc7a20";
+		reg = <0x19>;
+		irq_enable = <0>;
+		poll_delay_ms = <30>;
+		type = <SENSOR_TYPE_ACCEL>;
+		layout = <1>;
+		reprobe_en = <1>;
+		status = "okay";
+	};
+
+	sensor@4c {
+		compatible = "gs_mma7660";
+		reg = <0x4c>;
+		irq-gpio = <&gpio0 RK_PA6 IRQ_TYPE_LEVEL_LOW>;
+		irq_enable = <0>;
+		poll_delay_ms = <5>;
+		type = <SENSOR_TYPE_ACCEL>;
+		layout = <3>;
+		reprobe_en = <1>;
+		status = "okay";
+	};
+};
+
+/*
+ * Entrada HDMI: ponte RK628 (HDMI -> MIPI CSI) no I2C1. O driver existe no 6.1
+ * (VIDEO_RK628_CSI), mas fica desligado no marco 1: ver docs/kernel-6.1.md.
+ */
+&i2c1 {
+	clock-frequency = <200000>;
+	status = "okay";
+
+	rk628_csi: rk628_csi_v4l2@50 {
+		compatible = "rockchip,rk628-csi-v4l2";
+		reg = <0x50>;
+		interrupt-parent = <&gpio0>;
+		interrupts = <RK_PC5 IRQ_TYPE_LEVEL_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&rk628_plugin_h>;
+		hdcp-enable = <1>;
+		enable-gpios = <&gpio0 RK_PB0 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio0 RK_PC7 GPIO_ACTIVE_LOW>;
+		plugin-det-gpios = <&gpio0 RK_PC6 GPIO_ACTIVE_LOW>;
+		rockchip,camera-module-index = <0>;
+		rockchip,camera-module-facing = "back";
+		rockchip,camera-module-name = "RK628-CSI";
+		rockchip,camera-module-lens-name = "NC";
+		status = "disabled";
+
+		port {
+			rk628_out: endpoint {
+				remote-endpoint = <&mipi_in_rk628>;
+				data-lanes = <1 2 3 4>;
+			};
+		};
+	};
+};
+
+/* Câmeras da placa de referência não existem aqui. */
+&i2c2 {
+	status = "disabled";
+
+	/delete-node/ gc4c33@29;
+	/delete-node/ gc8034@37;
+};
+
+&csi2_dphy0 {
+	ports {
+		port@0 {
+			/delete-node/ endpoint@1;
+			/delete-node/ endpoint@2;
+
+			mipi_in_rk628: endpoint@0 {
+				reg = <0>;
+				remote-endpoint = <&rk628_out>;
+				data-lanes = <1 2 3 4>;
+			};
+		};
+
+		port@1 {
+			/delete-node/ endpoint@1;
+
+			csidphy0_out: endpoint@0 {
+				reg = <0>;
+				remote-endpoint = <&isp0_in>;
+			};
+		};
+	};
+};
+
+&rkisp_vir0 {
+	port {
+		/delete-node/ endpoint@0;
+
+		isp0_in: endpoint@0 {
+			reg = <0>;
+			remote-endpoint = <&csidphy0_out>;
+		};
+	};
+};
+
+/* I2S1: áudio interno, só saída (sdo0), sem TRCM. */
+&i2s1_8ch {
+	/delete-property/ rockchip,trcm-sync-tx-only;
+	pinctrl-0 = <&i2s1m0_sclktx &i2s1m0_sclkrx &i2s1m0_lrcktx &i2s1m0_lrckrx &i2s1m0_sdo0>;
+};
+
+&i2s2_2ch {
+	status = "okay";
+};
+
+/* I2S3: áudio da entrada HDMI (RK628). */
+&i2s3_2ch {
+	status = "okay";
+};
+
+&spdif_8ch {
+	status = "disabled";
+};
+
+&spdif_out {
+	status = "disabled";
+};
+
+&{/spdif-sound} {
+	status = "disabled";
+};
+
+/* VCCIO4 e VCCIO6 são de 1,8 V nesta placa (a de referência usa 3,3 V). */
+&pmu_io_domains {
+	vccio4-supply = <&vcc_1v8>;
+	vccio6-supply = <&vcc_1v8>;
+};
+
+/* Tensões iguais às da fábrica. */
+&vdd_cpu {
+	regulator-init-microvolt = <1000000>;
+};
+
+&vdd_fixed {
+	regulator-min-microvolt = <1000000>;
+	regulator-max-microvolt = <1000000>;
+};
+
+/*
+ * O DT de fábrica liga o camera-pwr ao GPIO0_C3, que é o pino do PWM4 (backlight);
+ * o regulador usa o GPIO0_C5. Aqui o pinctrl segue o GPIO do regulador.
+ */
+
+&vcc5v0_otg {
+	gpio = <&gpio0 RK_PC1 GPIO_ACTIVE_HIGH>;
+};
+
+&vcc5v0_otg_en {
+	rockchip,pins = <0 RK_PC1 RK_FUNC_GPIO &pcfg_pull_none>;
+};
+
+/* A única USB é a porta A (host); OTG, SATA e a segunda PHY não são usados. */
+&usbdrd_dwc3 {
+	dr_mode = "host";
+};
+
+&sata2 {
+	status = "disabled";
+};
+
+&u2phy1_host {
+	status = "disabled";
+};
+
+&u2phy1_otg {
+	status = "disabled";
+};
+
+&usb_host0_ehci {
+	status = "disabled";
+};
+
+&usb_host0_ohci {
+	status = "disabled";
+};
+
+&usb_host1_ehci {
+	status = "disabled";
+};
+
+&usb_host1_ohci {
+	status = "disabled";
+};
+
+/*
+ * O 6.1 põe o clock de 32 kHz no GPIO0_B0, que nesta placa é o enable do RK628.
+ * A fábrica deixa o pino como GPIO.
+ */
+&xin32k {
+	/delete-property/ pinctrl-names;
+	/delete-property/ pinctrl-0;
+};
+
+/*
+ * Não há Ethernet. A fábrica deixa o gmac1 ligado (e ele falha no boot), mexendo nos
+ * pinos do gmac1m1 e num GPIO de reset. No marco 1 ele fica desligado.
+ */
+&gmac1 {
+	status = "disabled";
+};
+
+/* NPU desligada, como na fábrica. */
+&rknpu {
+	status = "disabled";
+};
+
+&rkvenc_mmu {
+	rockchip,shootdown-entire;
+};
+
+&rkvdec_mmu {
+	rockchip,shootdown-entire;
+};
+
+&wdt {
+	status = "okay";
+};
+
+&pinctrl {
+	panel {
+		lcd_rst_gpio: lcd-rst-gpio {
+			rockchip,pins = <2 RK_PA1 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		lcd_enable_gpio: lcd-enable-gpio {
+			rockchip,pins = <2 RK_PA2 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		lcd_sda: lcd-sda {
+			rockchip,pins = <1 RK_PD5 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+
+		lcd_scl: lcd-scl {
+			rockchip,pins = <1 RK_PD6 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+
+		lcd_cs: lcd-cs {
+			rockchip,pins = <1 RK_PD7 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+
+		lcd_stb: lcd-stb {
+			rockchip,pins = <2 RK_PA0 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+
+	rk628 {
+		rk628_plugin_h: rk628_plugin-h {
+			rockchip,pins = <0 RK_PC6 RK_FUNC_GPIO &pcfg_pull_up_drv_level_4>;
+		};
+	};
+};

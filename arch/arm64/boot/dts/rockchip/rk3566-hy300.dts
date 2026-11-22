@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * HY300 projector (TXCZ rk3566_y356tx)
+ * Base: RK3566 BOX DEMO V10 + sobrescritas extraídas do DTB de fábrica.
+ */
+
+#include "rk3566-box-demo-v10.dts"
+#include "rk3566-hy300-overrides.dtsi"

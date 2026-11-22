@@ -773,7 +773,7 @@ static void rwnx_csa_finish(struct work_struct *ws)
 		} else
 			rwnx_txq_vif_stop(vif, RWNX_TXQ_STOP_CHAN, rwnx_hw);
 		spin_unlock_bh(&rwnx_hw->cb_lock);
-#if (LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0))
                 cfg80211_ch_switch_notify(vif->ndev, &csa->chandef, 0, 0);
 #elif (LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION)
                 cfg80211_ch_switch_notify(vif->ndev, &csa->chandef, 0);
@@ -2944,13 +2944,17 @@ static struct rwnx_vif *rwnx_interface_add(struct rwnx_hw *rwnx_hw,
 		break;
 	}
 
+	/* Desde o 5.17 o dev_addr é const: endereço novo só por eth_hw_addr_set. */
 	if (type == NL80211_IFTYPE_AP_VLAN) {
-		memcpy(ndev->dev_addr, params->macaddr, ETH_ALEN);
+		eth_hw_addr_set(ndev, params->macaddr);
 		memcpy(vif->wdev.address, params->macaddr, ETH_ALEN);
 	} else {
-		memcpy(ndev->dev_addr, rwnx_hw->wiphy->perm_addr, ETH_ALEN);
-		ndev->dev_addr[5] ^= vif_idx;
-		memcpy(vif->wdev.address, ndev->dev_addr, ETH_ALEN);
+		u8 addr[ETH_ALEN];
+
+		memcpy(addr, rwnx_hw->wiphy->perm_addr, ETH_ALEN);
+		addr[5] ^= vif_idx;
+		eth_hw_addr_set(ndev, addr);
+		memcpy(vif->wdev.address, addr, ETH_ALEN);
 	}
 
 	AICWFDBG(LOGINFO, "interface add:%x %x %x %x %x %x\n", vif->wdev.address[0], vif->wdev.address[1], \

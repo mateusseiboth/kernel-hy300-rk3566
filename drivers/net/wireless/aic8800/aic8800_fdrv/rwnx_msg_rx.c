@@ -852,8 +852,8 @@ static inline int rwnx_rx_sm_connect_ind(struct rwnx_hw *rwnx_hw,
 				rwnx_vif->sta.ssid,
 				IEEE80211_BSS_TYPE_ESS,
 #if LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION
-				wdev->u.client.ssid, 
 				wdev->u.client.ssid_len,
+				wdev->u.client.ssid,
 #else
 				wdev->ssid_len,
 				wdev->ssid,

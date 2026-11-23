@@ -199,6 +199,8 @@
 		compatible = "simple-audio-card";
 		simple-audio-card,format = "i2s";
 		simple-audio-card,name = "rockchip,hdmiin";
+		/* card 1, como na fábrica (o áudio do LineageOS usa card 1 = HDMI In) */
+		hy300,card-index = <1>;
 		simple-audio-card,bitclock-master = <&hdmiin_codec_dai>;
 		simple-audio-card,frame-master = <&hdmiin_codec_dai>;
 		status = "okay";
@@ -308,6 +310,11 @@
 	rockchip-i2s-sound {
 		compatible = "simple-audio-card";
 		simple-audio-card,name = "rockchip,rockchip-i2s-sound";
+		/*
+		 * card 0, como na fábrica. Lá a ordem saía só da ordem dos nós no DT (as duas placas
+		 * fazem probe na mesma rodada); aqui o índice é fixo (hy300,card-index no soc-core).
+		 */
+		hy300,card-index = <0>;
 		simple-audio-card,format = "i2s";
 		simple-audio-card,mclk-fs = <256>;
 		status = "okay";

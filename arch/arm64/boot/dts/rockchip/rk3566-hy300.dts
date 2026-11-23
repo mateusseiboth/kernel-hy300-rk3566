@@ -718,6 +718,20 @@
 };
 
 /* I2S1: áudio interno, só saída (sdo0), sem TRCM. */
+/*
+ * Amplificador do alto-falante: liga com o GPIO1_B2 em nível alto. Na fábrica o pino ficava fixo
+ * (gpio 42) no mute do dummy-codec da TXCZ, alto ao tocar e baixo ao silenciar; sem ele o I2S1
+ * toca e a caixa fica muda. Aqui fica sempre ligado.
+ */
+&gpio1 {
+	speaker-amp-enable-hog {
+		gpio-hog;
+		gpios = <RK_PB2 GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "speaker-amp-enable";
+	};
+};
+
 &i2s1_8ch {
 	/delete-property/ rockchip,trcm-sync-tx-only;
 	pinctrl-0 = <&i2s1m0_sclktx &i2s1m0_sclkrx &i2s1m0_lrcktx &i2s1m0_lrckrx &i2s1m0_sdo0>;

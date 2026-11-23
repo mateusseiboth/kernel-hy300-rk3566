@@ -327,15 +327,6 @@
 			sound-dai = <&dummy_codec>;
 		};
 	};
-
-	/*
-	 * Motor de foco. No DT de fábrica o nó não tem propriedades: o driver fechado da
-	 * TXCZ (rk_motor/usb-cam-gpio, /sys/class/motor_cc) fixa os pinos no código.
-	 * Não existe driver no 6.1; o nó fica para documentar a compatibilidade.
-	 */
-	rk_motor {
-		compatible = "rk_motor", "usb-cam-gpio";
-	};
 };
 
 /* Saída HDMI não existe nesta placa: a imagem vai para o LVDS. */

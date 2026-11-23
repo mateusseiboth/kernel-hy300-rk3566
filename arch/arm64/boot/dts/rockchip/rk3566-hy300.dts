@@ -180,6 +180,21 @@
 		status = "okay";
 	};
 
+	/*
+	 * Motor de passo do foco. O usb-cam-gpio de fábrica (nó "rk_motor" sem propriedades) usa
+	 * números fixos no código: fases nos gpio 146..149 (GPIO4_C2..C5) e fim de curso no 153
+	 * (GPIO4_D1, 1 = no limite). Interface em /sys/class/motor_cc/motor_cc.
+	 */
+	focus-motor {
+		compatible = "txcz,hy300-focus-motor";
+		phase-gpios = <&gpio4 RK_PC2 GPIO_ACTIVE_HIGH>,
+			      <&gpio4 RK_PC3 GPIO_ACTIVE_HIGH>,
+			      <&gpio4 RK_PC4 GPIO_ACTIVE_HIGH>,
+			      <&gpio4 RK_PC5 GPIO_ACTIVE_HIGH>;
+		limit-gpios = <&gpio4 RK_PD1 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+
 	hdmi-in-sound {
 		compatible = "simple-audio-card";
 		simple-audio-card,format = "i2s";

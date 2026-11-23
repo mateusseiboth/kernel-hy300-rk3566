@@ -523,6 +523,21 @@ config VCPU_STALL_DETECTOR
 
 	  If you do not intend to run this kernel as a guest, say N.
 
+config HY300_FOCUS_MOTOR
+	tristate "Motor de foco do projetor HY300 (motor_cc)"
+	depends on GPIOLIB && INPUT && OF
+	help
+	  Motor de passo do foco do projetor HY300 (TXCZ), com a interface do
+	  usb-cam-gpio do kernel de fábrica: /sys/class/motor_cc/motor_cc/motor
+	  recebe user_cw, user_ccw, aacw, aaccw, aacw_end, aaccw_end e aastop, e
+	  .../hd_camera_on mostra o fim de curso. As teclas F15 e F16 do controle
+	  remoto movem o foco, como na fábrica.
+
+config HY300_FOCUS_MOTOR_KUNIT_TEST
+	bool "KUnit do motor de foco do HY300" if !KUNIT_ALL_TESTS
+	depends on HY300_FOCUS_MOTOR && KUNIT=y
+	default KUNIT_ALL_TESTS
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"

@@ -1936,6 +1936,30 @@ static void snd_soc_unbind_card(struct snd_soc_card *card, bool unregister)
 	}
 }
 
+/*
+ * hy300: índice fixo da placa ALSA pela propriedade "hy300,card-index" do nó da placa no DT.
+ * Sem ela, o índice é o primeiro livre e depende da ordem de probe; o áudio do LineageOS do
+ * HY300 conta com card 0 = alto-falante e card 1 = entrada HDMI. Se o índice pedido já estiver
+ * ocupado (outra placa chegou antes), cai no primeiro livre em vez de perder a placa.
+ */
+static int soc_new_snd_card(struct snd_soc_card *card)
+{
+	u32 idx;
+	int ret;
+
+	if (!card->dev || !card->dev->of_node ||
+	    of_property_read_u32(card->dev->of_node, "hy300,card-index", &idx))
+		return snd_card_new(card->dev, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1,
+				    card->owner, 0, &card->snd_card);
+
+	ret = snd_card_new(card->dev, idx, SNDRV_DEFAULT_STR1, card->owner, 0, &card->snd_card);
+	if (ret != -EBUSY)
+		return ret;
+	dev_warn(card->dev, "ASoC: card index %u busy, using the first free one\n", idx);
+	return snd_card_new(card->dev, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1,
+			    card->owner, 0, &card->snd_card);
+}
+
 static int snd_soc_bind_card(struct snd_soc_card *card)
 {
 	struct snd_soc_pcm_runtime *rtd;
@@ -1965,8 +1989,7 @@ static int snd_soc_bind_card(struct snd_soc_card *card)
 	}
 
 	/* card bind complete so register a sound card */
-	ret = snd_card_new(card->dev, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1,
-			card->owner, 0, &card->snd_card);
+	ret = soc_new_snd_card(card);
 	if (ret < 0) {
 		dev_err(card->dev,
 			"ASoC: can't create sound card for card %s: %d\n",

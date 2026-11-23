@@ -114,13 +114,17 @@
 		status = "okay";
 
 		/*
-		 * Botão de liga/desliga. Mesmo pino do LED "green" abaixo (GPIO1_B0), como no
-		 * DT de fábrica.
+		 * Botão de liga/desliga no GPIO1_A0, ativo em nível baixo. A fábrica declara
+		 * "interrupts = <0x0 0x8>" no gpio1, ou seja, pino 0 com IRQ_TYPE_LEVEL_LOW (o
+		 * /proc/interrupts de fábrica mostra "gpio1 0 Level"). Lido ao contrário (pino 8,
+		 * tipo 0) ele cai no GPIO1_B0, que é o LED "green" abaixo: saída em nível baixo e,
+		 * sem tipo, interrupção em nível baixo, disparando sem parar na CPU0 (~270 mil por
+		 * segundo). Como GPIO, o gpio-keys usa as duas bordas com debounce e o botão
+		 * segurado não gera tempestade de interrupções.
 		 */
 		power-key {
 			label = "GPIO Key Home";
-			interrupt-parent = <&gpio1>;
-			interrupts = <RK_PB0 IRQ_TYPE_NONE>;
+			gpios = <&gpio1 RK_PA0 GPIO_ACTIVE_LOW>;
 			linux,input-type = <EV_KEY>;
 			linux,code = <KEY_POWER>;
 			debounce-interval = <10>;

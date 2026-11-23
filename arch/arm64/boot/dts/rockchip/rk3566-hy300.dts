@@ -642,8 +642,9 @@
 };
 
 /*
- * Entrada HDMI: ponte RK628 (HDMI -> MIPI CSI) no I2C1. O driver existe no 6.1
- * (VIDEO_RK628_CSI), mas fica desligado no marco 1: ver docs/kernel-6.1.md.
+ * Entrada HDMI: ponte RK628 (HDMI -> MIPI CSI 4 lanes) no I2C1, como na fábrica: csi2-dphy0 ->
+ * rkisp-vir0 (/dev/video do mainpath do ISP) e o áudio pelo I2S3 na placa "rockchip,hdmiin".
+ * Estado em /sys/class/hdmirx/rk628/ (audio_present, audio_rate).
  */
 &i2c1 {
 	clock-frequency = <200000>;
@@ -664,7 +665,7 @@
 		rockchip,camera-module-facing = "back";
 		rockchip,camera-module-name = "RK628-CSI";
 		rockchip,camera-module-lens-name = "NC";
-		status = "disabled";
+		status = "okay";
 
 		port {
 			rk628_out: endpoint {

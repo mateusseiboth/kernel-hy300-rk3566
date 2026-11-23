@@ -9,3 +9,13 @@ config AIC8800
 
 	  O firmware não vem junto: o aic8800_bsp lê os arquivos de aic_fw_path
 	  (padrão /lib/firmware/aic8800). Usado no HY300 (AIC8800D80).
+
+config AIC8800_BTLPM
+	tristate "AICSemi AIC8800: rfkill do Bluetooth (aic8800_btlpm)"
+	depends on AIC8800 && RFKILL
+	help
+	  aic8800_btlpm do mesmo SDK: registra o rfkill "bluetooth" que liga e
+	  desliga a parte de Bluetooth do chip pelo aic8800_bsp
+	  (aicbsp_set_subsys), para o BT funcionar com o Wi-Fi desligado. O HCI
+	  do AIC8800D80 é pelo UART1 (ttyS1, H4 a 1,5 Mbaud); o patch do BT é
+	  carregado pelo aic8800_bsp junto com o firmware do Wi-Fi.

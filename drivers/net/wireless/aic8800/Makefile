@@ -1,2 +1,3 @@
 # SPDX-License-Identifier: GPL-2.0
 obj-$(CONFIG_AIC8800) += aic8800_bsp/ aic8800_fdrv/
+obj-$(CONFIG_AIC8800_BTLPM) += aic8800_btlpm/

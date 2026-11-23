@@ -438,6 +438,9 @@ out:
 
 #define NUM_FAULT_PAGES (SZ_2M / PAGE_SIZE)
 
+/* panfrost_mmu_map_fault_addr(): o bloco de 2 MiB já estava mapeado */
+#define PANFROST_MMU_FAULT_ALREADY_MAPPED 1
+
 static int panfrost_mmu_map_fault_addr(struct panfrost_device *pfdev, int as,
 				       u64 addr)
 {
@@ -497,6 +500,7 @@ static int panfrost_mmu_map_fault_addr(struct panfrost_device *pfdev, int as,
 	if (sgt->sgl) {
 		/* Pages are already mapped, bail out. */
 		mutex_unlock(&bo->base.pages_lock);
+		ret = PANFROST_MMU_FAULT_ALREADY_MAPPED;
 		goto out;
 	}
 
@@ -541,7 +545,7 @@ static int panfrost_mmu_map_fault_addr(struct panfrost_device *pfdev, int as,
 out:
 	panfrost_gem_mapping_put(bomapping);
 
-	return 0;
+	return ret;
 
 err_map:
 	sg_free_table(sgt);
@@ -686,6 +690,49 @@ static irqreturn_t panfrost_mmu_irq_handler(int irq, void *data)
 	return IRQ_WAKE_THREAD;
 }
 
+/*
+ * hy300: uma falha de heap que volta no mesmo bloco de 2 MiB depois de tratada
+ * quer dizer que o mapeamento não chegou à GPU (por exemplo, map_pages() sem
+ * memória para a tabela de páginas, erro que o 6.1 ignora). A GPU falha de novo,
+ * o tratador responde "já mapeado" e a thread, SCHED_FIFO, gira nesta CPU sem
+ * fim. Depois de MMU_FAULT_REPEAT_MAX respostas "já mapeado" seguidas no mesmo
+ * bloco, sem nenhum mapeamento novo no meio, a falha passa a ser terminal: o AS
+ * é desligado e o job morre, como numa falha não tratada.
+ */
+#define MMU_FAULT_REPEAT_MAX 32
+
+static bool panfrost_mmu_fault_is_stuck(struct panfrost_device *pfdev, u32 as, u64 addr)
+{
+	u64 block = addr / SZ_2M;
+
+	if (pfdev->mmu_fault_repeat.as == as && pfdev->mmu_fault_repeat.block == block)
+		return ++pfdev->mmu_fault_repeat.count > MMU_FAULT_REPEAT_MAX;
+
+	pfdev->mmu_fault_repeat.as = as;
+	pfdev->mmu_fault_repeat.block = block;
+	pfdev->mmu_fault_repeat.count = 1;
+	return false;
+}
+
+static int panfrost_mmu_handle_heap_fault(struct panfrost_device *pfdev, u32 as, u64 addr)
+{
+	int ret = panfrost_mmu_map_fault_addr(pfdev, as, addr);
+
+	if (ret != PANFROST_MMU_FAULT_ALREADY_MAPPED) {
+		pfdev->mmu_fault_repeat.count = 0;
+		return ret;
+	}
+
+	if (!panfrost_mmu_fault_is_stuck(pfdev, as, addr))
+		return 0;
+
+	dev_err(pfdev->dev,
+		"AS%d: page fault at VA 0x%016llX already mapped %u times in a row, giving up\n",
+		as, addr, MMU_FAULT_REPEAT_MAX);
+	pfdev->mmu_fault_repeat.count = 0;
+	return -EFAULT;
+}
+
 static irqreturn_t panfrost_mmu_irq_handler_thread(int irq, void *data)
 {
 	struct panfrost_device *pfdev = data;
@@ -715,7 +762,7 @@ static irqreturn_t panfrost_mmu_irq_handler_thread(int irq, void *data)
 		/* Page fault only */
 		ret = -1;
 		if ((status & mask) == BIT(as) && (exception_type & 0xF8) == 0xC0)
-			ret = panfrost_mmu_map_fault_addr(pfdev, as, addr);
+			ret = panfrost_mmu_handle_heap_fault(pfdev, as, addr);
 
 		if (ret) {
 			/* terminal fault, print info about the fault */

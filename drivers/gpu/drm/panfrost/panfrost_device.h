@@ -110,6 +110,16 @@ struct panfrost_device {
 	unsigned long as_faulty_mask;
 	struct list_head as_lru_list;
 
+	/*
+	 * hy300: falhas de heap seguidas respondidas com "já mapeado", só usado
+	 * pela thread de IRQ da MMU (ver panfrost_mmu_handle_heap_fault()).
+	 */
+	struct {
+		u32 as;
+		u64 block;
+		unsigned int count;
+	} mmu_fault_repeat;
+
 	struct panfrost_job_slot *js;
 
 	struct panfrost_job *jobs[NUM_JOB_SLOTS][2];
